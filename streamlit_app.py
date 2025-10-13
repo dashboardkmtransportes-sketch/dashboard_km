@@ -4512,14 +4512,16 @@ def main():
                                 hide_index=True
                             )
 
-                            csv_setor = df_tabela_setor.to_csv(index=False).encode('utf-8')
+                            # ✅ LÓGICA DE DOWNLOAD MOVIDA PARA DENTRO DO BLOCO 'IF'
+                            excel_data_setor = to_excel(df_tabela_setor)
                             st.download_button(
-                            label="📥 Baixar dados do setor (CSV)",
-                            data=csv_setor,
-                            file_name=f"cancelamentos_setor_{setor_selecionado.lower()}_{datetime.now().strftime('%Y%m%d')}.csv",
-                            mime="text/csv",
-                            key="download_setor_button"
+                                label="📥 Baixar dados do setor (Excel)",
+                                data=excel_data_setor,
+                                file_name=f"cancelamentos_setor_{setor_selecionado.lower()}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key="download_setor_button_excel"
                             )
+
                         else:
                             st.info(f"Nenhum cancelamento encontrado para o setor '{setor_selecionado}' com os filtros atuais.")
 

@@ -21,26 +21,6 @@ def get_image_as_base64(path):
         return None
     with open(path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode()
-    
-    # ✅ NOVA FUNÇÃO PARA EMBUTIR A IMAGEM
-def get_image_as_base64(path):
-    """Lê um arquivo de imagem e o converte para o formato Base64."""
-    if not os.path.exists(path):
-        return None
-    with open(path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode()
-
-# ✅ NOVA FUNÇÃO PARA GERAR DOWNLOAD EM EXCEL
-from io import BytesIO
-def to_excel(df):
-    """Converte um DataFrame para um arquivo Excel em memória."""
-    output = BytesIO()
-    # 'index=False' para não incluir o índice do DataFrame no arquivo
-    # 'engine='openpyxl'' é o motor que o pandas usa para escrever em .xlsx
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Dados')
-    processed_data = output.getvalue()
-    return processed_data
 
 # Ajuste de locale para português (funciona em Windows, Linux e Mac)
 so = platform.system()
@@ -4154,26 +4134,13 @@ def main():
 
                     # ====== DOWNLOAD DOS DADOS PRINCIPAIS ======
                     st.markdown("### 💾 Download dos Dados")
-                    excel_data_principal = to_excel(df_exibicao)
+                    csv = df_exibicao.to_csv(index=False).encode('utf-8')
                     st.download_button(
-                        label="📥 Baixar dados filtrados (Excel)",
-                        data=excel_data_principal,
-                        file_name=f"{tipo_dados.lower()}_filtrados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        label="📥 Baixar dados filtrados (CSV)",
+                        data=csv,
+                        file_name=f"{tipo_dados.lower()}_filtrados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
                     )
-
-                    # ... (código) ...
-
-                    # Download da tabela de setores
-                    excel_data_setor = to_excel(df_tabela_setor)
-                    st.download_button(
-                        label="📥 Baixar dados do setor (Excel)",
-                        data=excel_data_setor,
-                        file_name=f"cancelamentos_setor_{setor_selecionado.lower()}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_setor_button_excel"
-                    )
-
                     
                   # ====== GRÁFICO DINÂMICO E TABELA DE SETORES ======
                     # (Dentro de with tab5, após a seção de download)
@@ -4512,16 +4479,14 @@ def main():
                                 hide_index=True
                             )
 
-                            # ✅ LÓGICA DE DOWNLOAD MOVIDA PARA DENTRO DO BLOCO 'IF'
-                            excel_data_setor = to_excel(df_tabela_setor)
+                            csv_setor = df_tabela_setor.to_csv(index=False).encode('utf-8')
                             st.download_button(
-                                label="📥 Baixar dados do setor (Excel)",
-                                data=excel_data_setor,
-                                file_name=f"cancelamentos_setor_{setor_selecionado.lower()}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key="download_setor_button_excel"
+                            label="📥 Baixar dados do setor (CSV)",
+                            data=csv_setor,
+                            file_name=f"cancelamentos_setor_{setor_selecionado.lower()}_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv",
+                            key="download_setor_button"
                             )
-
                         else:
                             st.info(f"Nenhum cancelamento encontrado para o setor '{setor_selecionado}' com os filtros atuais.")
 

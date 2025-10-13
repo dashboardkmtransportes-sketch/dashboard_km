@@ -772,20 +772,12 @@ def main():
     "OCT": "Out", "NOV": "Nov", "DEC": "Dez"
 }
 
-    # PARA:
     # ==============================
     # 🖼️ Logo na Sidebar (com Base64 para garantir a exibição)
     # ==============================
-    
-    # 1. Define o caminho para o arquivo do logo
-    #    (Assumindo que 'logo_km.png' está na mesma pasta que o seu script .py)
     logo_path = "logo_km.png" 
-    
-    
-    # 2. Converte a imagem para Base64
     logo_base64 = get_image_as_base64(logo_path)
 
-    # 3. Renderiza o logo apenas se a conversão funcionou
     if logo_base64:
         st.sidebar.markdown(
             f"""
@@ -798,98 +790,79 @@ def main():
     else:
         st.sidebar.warning("Logo não encontrado. Verifique o caminho do arquivo.")
 
-    # Adiciona o divisor
     st.sidebar.markdown("---")
 
-    # ==============================
-    # ==============================
-    # 📅 Período de Emissão (sempre aberto)
-    # ==============================
-    with st.sidebar.expander("🗓️ Período de Emissão", expanded=True):
-        today = datetime.now().date()
-        
-        # --- ALTERAÇÃO AQUI ---
-        # Define a data de início padrão como 1º de janeiro de 2024.
-        default_start_date = date(2024, 1, 1)
-        # A data final padrão continua sendo a data atual.
-        default_end_date = today
-        # --- FIM DA ALTERAÇÃO ---
+    # =================================================================
+    # ✅ INÍCIO DA LÓGICA FINAL COM CALLBACKS
+    # =================================================================
 
-        date_range_calendar = st.date_input(
-            "Selecione o intervalo de datas:",
-            value=(default_start_date, default_end_date),
-            max_value=today,
-            format="DD/MM/YYYY"
-        )
-
-        if len(date_range_calendar) == 2:
-            start_date, end_date = date_range_calendar
-        else:
-            # Garante que os padrões sejam usados se algo der errado.
-            start_date, end_date = default_start_date, default_end_date
-
-    # ==============================
-    # 📅 Filtro de Ano (ORDEM CORRIGIDA)
-    # ==============================
-    with st.sidebar.expander("📅 Filtro por Ano", expanded=True):
-        # Garante que a lista de anos não quebre se o dataframe estiver vazio
-        if not emissoes_df.empty:
-            # --- ALTERAÇÃO AQUI ---
-            # Ordena os anos em ordem CRESCENTE (removendo reverse=True)
-            anos_disponiveis = sorted(emissoes_df['DATA_EMISSÃO'].dt.year.unique())
-            # --- FIM DA ALTERAÇÃO ---
-        else:
-            anos_disponiveis = [datetime.now().year] # Usa o ano atual como fallback
-
-        # Define as opções do selectbox, com "Todos" no início
-        opcoes_ano = ["Todos"] + anos_disponiveis
-        
-        # O padrão será o ano mais recente, que agora é o último item da lista
-        # Para encontrar o índice do ano mais recente, usamos len(opcoes_ano) - 1
-        indice_padrao = len(opcoes_ano) - 1
-
-        ano_selecionado = st.selectbox(
-            "Selecione o ano para análise:",
-            options=opcoes_ano,
-            index=indice_padrao, # Começa com o ano mais recente selecionado
-            key="filtro_ano_principal"
-        )
-
-
-    # --- Lógica para definir as datas com base no ano selecionado ---
     today = datetime.now().date()
-    if ano_selecionado == "Todos":
-        # Se "Todos" for selecionado, pega a primeira data de 2024 até a data atual
-        start_date = date(2024, 1, 1)
-        end_date = today
-    else:
-        # Se um ano específico for selecionado, define o intervalo para aquele ano
-        start_date = date(ano_selecionado, 1, 1)
-        # Se o ano selecionado for o ano atual, a data final é hoje. Senão, é 31/12 do ano selecionado.
-        if ano_selecionado == today.year:
-            end_date = today
-        else:
-            end_date = date(ano_selecionado, 12, 31)
 
-    # ==============================
-    # 🗓️ Período de Emissão (Calendário para ajuste fino)
-    # ==============================
-    with st.sidebar.expander("🗓️ Ajuste Fino do Período", expanded=False): # Começa fechado
-        # O valor do calendário agora é definido pela seleção do filtro de ano
-        date_range_calendar = st.date_input(
-            "Ajuste o intervalo de datas, se necessário:",
-            value=(start_date, end_date),
+    # --- 1. Função de Callback para o Atalho ---
+    # Esta função será chamada SEMPRE que o valor do selectbox 'filtro_ano_atalho' mudar.
+    def atualizar_periodo_pelo_atalho():
+        atalho = st.session_state.filtro_ano_atalho
+        
+        if atalho == "Todos (desde 2024)":
+            start_date_default = date(2024, 1, 1)
+            end_date_default = today
+        elif atalho == "Intervalo Personalizado":
+            # Não faz nada, mantém o valor que já está no calendário
+            return
+        else: # Se for um ano específico (ex: "2025")
+            ano_num = int(atalho)
+            start_date_default = date(ano_num, 1, 1)
+            end_date_default = date(ano_num, 12, 31) if ano_num != today.year else today
+        
+        # Atualiza o session_state do calendário. Como isso acontece via callback, é seguro.
+        st.session_state.date_range_final = (start_date_default, end_date_default)
+
+    # --- 2. Inicialização do st.session_state (se necessário) ---
+    # Garante que a chave 'date_range_final' exista antes de qualquer widget ser criado.
+    if 'date_range_final' not in st.session_state:
+        st.session_state.date_range_final = (date(2024, 1, 1), today)
+
+    # --- 3. Calendário de Período (Filtro Principal) ---
+    with st.sidebar.expander("🗓️ Período de Emissão (Filtro Principal)", expanded=True):
+        # O widget de data agora lê seu valor diretamente do session_state.
+        date_range_final = st.date_input(
+            "Selecione o intervalo de datas:",
+            key="date_range_final", # A chave conecta o widget ao session_state
+            min_value=date(2023, 1, 1),
             max_value=today,
             format="DD/MM/YYYY"
         )
 
-        # Atualiza as datas se o usuário modificar o calendário
-        if len(date_range_calendar) == 2:
-            start_date, end_date = date_range_calendar
+    # --- 4. Filtro Rápido por Ano (Atalho) ---
+    with st.sidebar.expander("📅 Filtro Rápido por Ano (Atalho)", expanded=True):
+        if not emissoes_df.empty:
+            anos_disponiveis = sorted(emissoes_df['DATA_EMISSÃO'].dt.year.unique())
         else:
-            # Mantém as datas definidas pelo filtro de ano se o calendário falhar
-            pass # As datas já foram definidas acima
+            anos_disponiveis = [today.year]
 
+        opcoes_ano = ["Intervalo Personalizado", "Todos (desde 2024)"] + anos_disponiveis
+        
+        # O selectbox agora chama a função 'atualizar_periodo_pelo_atalho' sempre que seu valor muda.
+        st.selectbox(
+            "Selecione um atalho de período:",
+            options=opcoes_ano,
+            index=1, # Padrão "Todos (desde 2024)"
+            key="filtro_ano_atalho",
+            on_change=atualizar_periodo_pelo_atalho, # <--- A MÁGICA ACONTECE AQUI
+            help="Use este atalho para alterar rapidamente o período no calendário acima."
+        )
+
+    # --- 5. Define as datas finais que serão usadas para filtrar os dados ---
+    # As datas continuam vindo do calendário, que é a fonte final da verdade.
+    if len(date_range_final) == 2:
+        start_date, end_date = date_range_final
+    else:
+        # Fallback para o valor no session_state
+        start_date, end_date = st.session_state.date_range_final
+
+    # =================================================================
+    # ✅ FIM DA LÓGICA FINAL
+    # =================================================================
 
     # ==============================
     # 📆 Mês (expander)
@@ -3707,100 +3680,128 @@ def main():
 
         st.markdown("---")
 
-        # Gráfico de Evolução da Taxa de Cancelamento
-        st.subheader(f"📈 Evolução da Taxa de Cancelamento vs Meta ({ano_selecionado})")
+        # =================================================================
+        # ✅ INÍCIO DO CÓDIGO CORRIGIDO (v4 - Final)
+        # =================================================================
 
-        # Filtrar dados para o ano selecionado
-        ano_atual = ano_selecionado
-        emissoes_ano_atual = df_tab4[df_tab4['DATA_EMISSÃO'].dt.year == ano_atual].copy()
-        cancelamentos_ano_atual = cancelamentos_tab4[cancelamentos_tab4['DATA_CANCELADO'].dt.year == ano_atual].copy()
+        # Define o título do gráfico
+        st.subheader(f"📈 Evolução Comparativa da Taxa de Cancelamento — {st.session_state.get('filtro_ano_atalho', '')}")
 
-        if not emissoes_ano_atual.empty and not cancelamentos_ano_atual.empty:
-            emissoes_mensais = emissoes_ano_atual.groupby(emissoes_ano_atual['DATA_EMISSÃO'].dt.to_period('M'))['CTRC_EMITIDO'].sum()
-            cancelamentos_mensais = cancelamentos_ano_atual.groupby(cancelamentos_ano_atual['DATA_CANCELADO'].dt.to_period('M')).size()
 
-            meses_ano = pd.period_range(start=f'{ano_atual}-01', end=f'{ano_atual}-12', freq='M')
-            df_evolucao = pd.DataFrame(index=meses_ano)
-            df_evolucao['Emissoes'] = emissoes_mensais.reindex(meses_ano, fill_value=0)
+        # Usa os dataframes já filtrados pelo período principal do dashboard
+        emissoes_periodo = df_tab4.copy()
+        cancelamentos_periodo = cancelamentos_tab4.copy()
 
-            # Força denominadores fixos (jan–ago) APENAS na visão geral
-            if usuario_selecionado == "Todos" and expedicao_selecionada == "Todas":
-                for nome_mes, valor in EMISSOES_FIXAS_MES.items():
-                    pos = MESES_MAP[nome_mes] - 1
-                    if 0 <= pos < len(df_evolucao):
-                        df_evolucao.iloc[pos, df_evolucao.columns.get_loc('Emissoes')] = valor
-
-            df_evolucao['Cancelamentos'] = cancelamentos_mensais.reindex(meses_ano, fill_value=0)
-            df_evolucao['Taxa_Cancelamento'] = (df_evolucao['Cancelamentos'] / df_evolucao['Emissoes'] * 100).fillna(0)
-            df_evolucao['Mes'] = df_evolucao.index.strftime('%b/%Y')
-            df_evolucao = df_evolucao.reset_index(drop=True)
-
+        # Verifica se há dados para processar
+        if not emissoes_periodo.empty and not cancelamentos_periodo.empty:
             
-            # Criar gráfico de linha
-            fig_evolucao_taxa = go.Figure()
+            anos_no_periodo = sorted(emissoes_periodo['DATA_EMISSÃO'].dt.year.unique())
             
-            # Linha da taxa de cancelamento
-            fig_evolucao_taxa.add_trace(go.Scatter(
-                x=df_evolucao['Mes'],
-                y=df_evolucao['Taxa_Cancelamento'],
-                mode='lines+markers+text',  # <<< rótulos ativados
-                name='Taxa de Cancelamento (%)',
-                line=dict(color="#0145cd", width=3),
-                marker=dict(size=8, color="#FFFFFF"),
-                text=[f'{val:.2f}%' for val in df_evolucao['Taxa_Cancelamento']],
-                textposition='top center',
-                textfont=dict(size=16, color='white'), # Adiciona cor e tamanho para melhor visibilidade
-                hovertemplate='<b>%{x}</b><br>Taxa: %{y:.2f}%<extra></extra>'
-            ))
+            fig_evolucao_comparativa = go.Figure()
             
-            # Linha de meta (0.75%)
-            fig_evolucao_taxa.add_hline(
+            cores_anos = ['#1E90FF', '#FF4500', '#32CD32', '#FFD700']
+
+            for i, ano in enumerate(anos_no_periodo):
+                
+                emissoes_ano = emissoes_periodo[emissoes_periodo['DATA_EMISSÃO'].dt.year == ano]
+                cancelamentos_ano = cancelamentos_periodo[cancelamentos_periodo['DATA_CANCELADO'].dt.year == ano]
+
+                emissoes_mensais = emissoes_ano.groupby(emissoes_ano['DATA_EMISSÃO'].dt.month)['CTRC_EMITIDO'].sum()
+                cancelamentos_mensais = cancelamentos_ano.groupby(cancelamentos_ano['DATA_CANCELADO'].dt.month).size()
+
+                df_evolucao_ano = pd.DataFrame(index=range(1, 13))
+                df_evolucao_ano.index.name = 'Mes_Num'
+                df_evolucao_ano['Emissoes'] = emissoes_mensais
+                df_evolucao_ano['Cancelamentos'] = cancelamentos_mensais
+                df_evolucao_ano.fillna(0, inplace=True)
+
+                if usuario_selecionado == "Todos" and expedicao_selecionada == "Todas":
+                    for nome_mes, valor_fixo in EMISSOES_FIXAS_MES.items():
+                        mes_num = MESES_MAP.get(nome_mes)
+                        if mes_num and mes_num in df_evolucao_ano.index:
+                            df_evolucao_ano.loc[df_evolucao_ano.index == mes_num, 'Emissoes'] = valor_fixo
+                
+                df_evolucao_ano['Taxa_Cancelamento'] = (df_evolucao_ano['Cancelamentos'] / df_evolucao_ano['Emissoes'] * 100).fillna(0)
+                
+                df_evolucao_ano['Ano'] = ano
+
+                # --- CORREÇÃO DE SINTAXE APLICADA AQUI ---
+                fig_evolucao_comparativa.add_trace(go.Scatter(
+                    x=df_evolucao_ano.index,
+                    y=df_evolucao_ano['Taxa_Cancelamento'],
+                    customdata=df_evolucao_ano['Ano'],
+                    mode='lines+markers+text',
+                    name=f'Ano {ano}',
+                    line=dict(color=cores_anos[i % len(cores_anos)], width=3),
+                    marker=dict(size=8),
+                    text=[f"{y:.2f}%" for y in df_evolucao_ano['Taxa_Cancelamento']],
+                    textposition='top center' if ano == 2025 else 'bottom center',
+                    textfont=dict(size=13, color='white', family="Verdana"),
+
+                    # Tooltip minimalista com divisor abaixo da Taxa
+                    hovertemplate="<b>Ano:</b> %{customdata}<br>"
+                                "<b>Taxa:</b> %{y:.2f}%<br>"
+                                "<span style='display:block; border-bottom:1px solid rgba(255,255,255,0.2); "
+                                "margin-top:4px; margin-bottom:4px;'></span>"
+                                "<extra></extra>"
+                ))
+
+                # --- Estilo visual moderno (modo escuro translúcido) ---
+                fig_evolucao_comparativa.update_layout(
+                    hovermode='x unified',
+                    hoverlabel=dict(
+                        bgcolor='rgba(17,25,40,0.9)',           # fundo translúcido escuro
+                        bordercolor='rgba(255,255,255,0.2)',    # borda leve
+                        font_size=13,
+                        font_color='white',
+                        font_family='Poppins',
+                        namelength=-1,
+                    ),
+                )
+                # --- FIM DA CORREÇÃO ---
+
+
+
+            fig_evolucao_comparativa.add_hline(
                 y=0.75, 
                 line_dash="dash", 
                 line_color="orange",
                 annotation_text="Meta: 0.75%",
-                annotation_position="top right"
+                annotation_position="bottom right",
+                annotation_font_color="orange"
             )
 
-            # Definir nomes completos em PT-BR
-            meses_labels = [
-                "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO",
-                "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
-            ]
-
-            # Forçar ticks do eixo X com nomes em maiúsculo📈 Evolução da Taxa de Cancelamento (Ano Atual)
-            fig_evolucao_taxa.update_xaxes(
-                tickvals=df_evolucao.index,     # posições (um por mês)
-                ticktext=meses_labels,          # nomes que irão aparecer
-                tickfont=dict(size=15, color="white", family="Calibri")  # aumenta tamanho, cor e fonte
-            )
-
-            fig_evolucao_taxa.update_layout(
-                xaxis_title='',
+            meses_nomes = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
+            fig_evolucao_comparativa.update_layout(
+                xaxis_title='Mês',
                 yaxis_title='Taxa de Cancelamento (%)',
-                height=550,
-                showlegend=False,
-                margin=dict(t=20, b=40),  # topo menor, gráfico sobe
+                height=700,
                 hovermode='x unified',
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 xaxis=dict(
+                    tickmode='array',
+                    tickvals=list(range(1, 13)),
+                    ticktext=meses_nomes,
                     showgrid=True,
                     gridcolor='rgba(128,128,128,0.2)'
                 ),
                 yaxis=dict(
                     showgrid=True,
                     gridcolor='rgba(128,128,128,0.2)',
-                    tickformat='.2f',
-                    tickfont=dict(size=15, color='white')  # <<< aumenta tamanho e cor da legenda dos meses
+                    tickformat='.2f'
                 )
             )
             
-            st.plotly_chart(fig_evolucao_taxa, use_container_width=True)
-            
-        
+            st.plotly_chart(fig_evolucao_comparativa, use_container_width=True)
+
         else:
-            st.info("Dados insuficientes para gerar o gráfico de evolução da taxa de cancelamento para o ano atual.")
+            st.info("Dados insuficientes para gerar o gráfico de evolução. Selecione um período com dados de emissão e cancelamento.")
+
+        # =================================================================
+        # ✅ FIM DO CÓDIGO CORRIGIDO (v4 - Final)
+        # =================================================================
         
         st.markdown("---")
 

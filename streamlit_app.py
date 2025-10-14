@@ -1602,16 +1602,10 @@ def main():
         # ===============================
         st.markdown("<h3 style='text-align: center;'>📊 Exibição dos Dados - Emissões e Cancelamentos</h3>", unsafe_allow_html=True)
 
-
-        # --- Lógica para Centralização ---
-        # 1. Criamos 3 colunas. As colunas das pontas (col_vazia1, col_vazia2) servirão como espaçamento.
-        # 2. A coluna do meio (col_central) conterá o nosso seletor.
-        # 3. O 'width' define a proporção. [1, 2, 1] significa que a coluna central terá o dobro da largura das laterais,
-        #    empurrando o conteúdo para o centro da tela.
+        # --- Centralização do seletor ---
         col_vazia1, col_central, col_vazia2 = st.columns([1, 2, 1])
 
         with col_central:
-            # Seletor com estilo moderno, agora dentro da coluna central
             tipo_agregacao = option_menu(
                 menu_title=None,
                 options=["Totais", "Médias"],
@@ -1620,20 +1614,17 @@ def main():
                 default_index=0,
                 orientation="horizontal",
                 styles={
-                    # Container principal que envolve os botões
                     "container": {
                         "padding": "5px !important",
                         "background-color": "#0f172a",
                         "border-radius": "12px",
                         "border": "1px solid #334155"
                     },
-                    # Ícone de cada botão
                     "icon": {
                         "color": "#f1f5f9",
                         "font-size": "18px",
                         "vertical-align": "middle",
                     },
-                    # Estilo de cada botão (link de navegação)
                     "nav-link": {
                         "font-size": "16px",
                         "text-align": "center",
@@ -1644,7 +1635,6 @@ def main():
                         "color": "#9CA3AF",
                         "--hover-color": "#334155",
                     },
-                    # Estilo do botão QUANDO ESTÁ SELECIONADO
                     "nav-link-selected": {
                         "background": "linear-gradient(135deg, #1e40af, #3b82f6)",
                         "color": "white",
@@ -1653,93 +1643,89 @@ def main():
                 }
             )
 
-        # O resto do seu código para os gráficos continua normalmente fora das colunas
+        # =====================================
+        # 📈 Emissões (Totais ou Médias)
+        # =====================================
         col1_chart, col2_chart = st.columns(2)
 
+        # Cole este bloco completo para substituir o seu 'with col1_chart:'
+
         with col1_chart:
-            # Título foi removido conforme solicitado anteriormente
-            # st.markdown(f"<h3 style='text-align: center;'>📈 Emissões ({tipo_agregacao})</h3>", unsafe_allow_html=True)
-            
-            # --- INÍCIO DA LÓGICA ATUALIZADA ---
-            
-            # Aplicar agregação baseada na seleção do usuário
+            # Lógica para definir o título e preparar os dados (seu código original)
             if tipo_agregacao == "Totais":
                 emissoes_mes = df_filtrado.groupby('MÊS')['CTRC_EMITIDO'].sum().reset_index()
-                # Renomeia a coluna para uma chave genérica ('Valor') para facilitar o plot
                 emissoes_mes.rename(columns={'CTRC_EMITIDO': 'Valor'}, inplace=True)
                 y_axis_title = 'Total de Emissões'
-
-            else:  # Lógica avançada para 'Médias'
+            else: # Médias
                 y_axis_title = 'Média de Emissões'
-                
-                # 1. Cria uma cópia do dataframe já filtrado pelos seletores da sidebar
                 df_para_media = df_filtrado.copy()
-                
-                # 2. Adiciona uma coluna com o dia da semana numérico (0=Segunda, 6=Domingo)
                 df_para_media['DIA_SEMANA_NUM'] = df_para_media['DATA_EMISSÃO'].dt.weekday
 
-                # 3. Aplica as regras de filtro de dias da semana com base na expedição selecionada
                 if expedicao_selecionada == 'NOITE':
-                    # Para 'NOITE', considera apenas dias de Segunda a Sexta (dias < 5)
                     df_para_media = df_para_media[df_para_media['DIA_SEMANA_NUM'] < 5]
                 elif expedicao_selecionada == 'DIA':
-                    # Para 'DIA', considera apenas dias de Segunda a Sábado (dias < 6)
                     df_para_media = df_para_media[df_para_media['DIA_SEMANA_NUM'] < 6]
-                # Se for 'Todas' ou outra expedição, nenhum filtro de dia da semana é aplicado.
 
-                # 4. Calcula o total de emissões por mês (usando o dataframe já filtrado por dia da semana, se aplicável)
                 soma_mensal = df_para_media.groupby('MÊS')['CTRC_EMITIDO'].sum()
-
-                # 5. Conta o número de DIAS ÚNICOS que tiveram emissão em cada mês
-                dias_unicos_com_emissao = df_para_media.groupby('MÊS')['DATA_EMISSÃO'].nunique()
-
-                # 6. Calcula a média correta: Total de Emissões / Dias Únicos com Emissão
-                # O .reset_index() transforma a Series resultante de volta em um DataFrame
-                media_correta = (soma_mensal / dias_unicos_com_emissao).reset_index(name='Valor')
-                
-                # O DataFrame final para o gráfico é o que contém as médias corretas
+                dias_unicos = df_para_media.groupby('MÊS')['DATA_EMISSÃO'].nunique()
+                media_correta = (soma_mensal / dias_unicos).reset_index(name='Valor')
                 emissoes_mes = media_correta
 
-            # --- FIM DA LÓGICA ATUALIZADA ---
+            # ✅ AJUSTE 1: Adicionar o subtítulo ANTES de verificar se os dados existem
+            st.markdown(f"<h3 style='text-align: center;'>📈 {y_axis_title}</h3>", unsafe_allow_html=True)
 
-            # Ordenar meses cronologicamente (código comum para Totais e Médias)
             if not emissoes_mes.empty:
-                meses_ordem = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 
-                            'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO']
-                emissoes_mes["ordem"] = emissoes_mes["MÊS"].map({mes: i for i, mes in enumerate(meses_ordem)})
+                # Mapeamento e ordenação dos meses (seu código original)
+                meses_abrev = {
+                    "JANEIRO": "JAN", "FEVEREIRO": "FEV", "MARÇO": "MAR", "ABRIL": "ABR",
+                    "MAIO": "MAI", "JUNHO": "JUN", "JULHO": "JUL", "AGOSTO": "AGO",
+                    "SETEMBRO": "SET", "OUTUBRO": "OUT", "NOVEMBRO": "NOV", "DEZEMBRO": "DEZ"
+                }
+                # Garante que a coluna 'MÊS' esteja em maiúsculas
+                emissoes_mes["MÊS"] = emissoes_mes["MÊS"].str.upper()
+                emissoes_mes["MES_ABREV"] = emissoes_mes["MÊS"].map(meses_abrev)
+
+                ordem = {mes: i for i, mes in enumerate(meses_abrev.keys())}
+                emissoes_mes["ordem"] = emissoes_mes["MÊS"].map(ordem)
                 emissoes_mes = emissoes_mes.sort_values("ordem")
 
-                # Cria o gráfico de barras usando a coluna genérica 'Valor'
+                # Criação do gráfico (seu código original)
                 fig_emissoes_mes = px.bar(
                     emissoes_mes,
-                    x="MÊS",
+                    x="MES_ABREV",
                     y="Valor",
-                    title="",
+                    title="", # Título interno vazio
                     color="Valor",
                     color_continuous_scale='Blues',
                     text='Valor'
                 )
-                
-                # Formatação do texto (padrão brasileiro com ponto como separador de milhar)
+
+                # Rótulos formatados (seu código original)
                 fig_emissoes_mes.update_traces(
                     text=[f"{int(v):,}".replace(",", ".") for v in emissoes_mes["Valor"]],
                     textposition='outside',
                     textfont_size=15
                 )
-                    
+
+                # Layout estético
                 fig_emissoes_mes.update_layout(
-                    xaxis_tickangle=0,
                     showlegend=False,
-                    margin=dict(t=50, b=50, l=70, r=20),
+                    margin=dict(t=20, b=60, l=70, r=20),
                     yaxis=dict(
                         range=[0, emissoes_mes["Valor"].max() * 1.3],
-                        title_text=y_axis_title, # Título do eixo Y dinâmico
-                        tickformat=",.0f"  # ✅ <--- A linha foi adicionada aqui
+                        title_text=y_axis_title,
+                        tickformat=",.0f"
                     ),
-                    coloraxis_colorbar=dict(
-                        tickformat=",.0f" 
+                    xaxis=dict(
+                        title="",
+                        tickangle=0,
+                        # ✅ AJUSTE 2: Aplicar a fonte maior e em negrito
+                        tickfont=dict(size=15, color='white', family='Verdana')
                     ),
-                    height=550
+                    coloraxis_colorbar=dict(tickformat=",.0f"),
+                    height=550,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)'
                 )
 
                 st.plotly_chart(fig_emissoes_mes, use_container_width=True)
@@ -1747,65 +1733,78 @@ def main():
                 st.info("Nenhum dado de emissão para exibir com os filtros aplicados.")
 
 
+        # Cole este bloco completo para substituir o seu 'with col2_chart:'
+
         with col2_chart:
-            # Título foi removido conforme solicitado anteriormente
-            # st.markdown(f"<h3 style='text-align: center;'>✖️ Cancelamentos ({tipo_agregacao})</h3>", unsafe_allow_html=True)
-            
-            # Aplicar agregação baseada na seleção
+            # Lógica para definir o título e preparar os dados (seu código original)
             if tipo_agregacao == "Totais":
                 cancelamentos_mes = cancelamentos_filtrado.groupby('MÊS').size().reset_index(name='Cancelamentos')
                 y_axis_title_canc = 'Total de Cancelamentos'
             else:  # Médias
-                # Para médias de cancelamentos, calcular média diária por mês
                 cancelamentos_por_dia = cancelamentos_filtrado.groupby(['MÊS', cancelamentos_filtrado['DATA_CANCELADO'].dt.date]).size().reset_index(name='Cancelamentos_Dia')
                 cancelamentos_mes = cancelamentos_por_dia.groupby('MÊS')['Cancelamentos_Dia'].mean().reset_index()
                 cancelamentos_mes.rename(columns={'Cancelamentos_Dia': 'Cancelamentos'}, inplace=True)
                 y_axis_title_canc = 'Média de Cancelamentos'
             
-            # Ordenar meses cronologicamente
+            # ✅ AJUSTE 1: Adicionar o subtítulo ANTES de verificar se os dados existem
+            st.markdown(f"<h3 style='text-align: center;'>✖️ {y_axis_title_canc}</h3>", unsafe_allow_html=True)
+
             if not cancelamentos_mes.empty:
-                meses_ordem = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 
-                            'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO']
-                cancelamentos_mes["ordem"] = cancelamentos_mes["MÊS"].map({mes: i for i, mes in enumerate(meses_ordem)})
+                # Mapeamento e ordenação dos meses (seu código original)
+                meses_abrev = {
+                    "JANEIRO": "JAN", "FEVEREIRO": "FEV", "MARÇO": "MAR", "ABRIL": "ABR",
+                    "MAIO": "MAI", "JUNHO": "JUN", "JULHO": "JUL", "AGOSTO": "AGO",
+                    "SETEMBRO": "SET", "OUTUBRO": "OUT", "NOVEMBRO": "NOV", "DEZEMBRO": "DEZ"
+                }
+                cancelamentos_mes["MÊS"] = cancelamentos_mes["MÊS"].str.upper()
+                cancelamentos_mes["MES_ABREV"] = cancelamentos_mes["MÊS"].map(meses_abrev)
+                ordem = {mes: i for i, mes in enumerate(meses_abrev.keys())}
+                cancelamentos_mes["ordem"] = cancelamentos_mes["MÊS"].map(ordem)
                 cancelamentos_mes = cancelamentos_mes.sort_values("ordem")
 
+                # Criação do gráfico (seu código original)
                 fig_canc_mes = px.bar(
                     cancelamentos_mes,
-                    x="MÊS",
+                    x="MES_ABREV",
                     y="Cancelamentos",
-                    title="",
+                    title="", # Título interno vazio
                     color="Cancelamentos",
-                    # ✅ 1. Escala de cores aprimorada para maior contraste
-                    color_continuous_scale=px.colors.sequential.OrRd, 
+                    color_continuous_scale=px.colors.sequential.OrRd,
                     text="Cancelamentos"
                 )
-                
-                # ✅ 2. Formatação do texto para usar ponto como separador de milhar
+
+                # Rótulos formatados (seu código original)
                 fig_canc_mes.update_traces(
                     text=[f"{int(v):,}".replace(",", ".") for v in cancelamentos_mes["Cancelamentos"]],
                     textposition='outside',
                     textfont_size=15
                 )
                     
-                # ✅ 3. Layout atualizado com formatação do eixo Y
+                # Layout estético
                 fig_canc_mes.update_layout(
-                    xaxis_tickangle=0,
-                    showlegend=False,
-                    margin=dict(t=50, b=50, l=70, r=20),
-                    yaxis=dict(
-                        range=[0, cancelamentos_mes["Cancelamentos"].max() * 1.2],
-                        title_text=y_axis_title_canc, # Título do eixo Y dinâmico
-                        tickformat=",.0f"  # Garante que o eixo Y mostre números inteiros
+                    xaxis=dict(
+                        title_text=None,
+                        tickangle=0,
+                        # ✅ AJUSTE 2: Aplicar a fonte maior e em negrito
+                        tickfont=dict(size=15, color='white', family="Verdana")
                     ),
-                    # Remove a barra de cores para um visual mais limpo, como na imagem
-                    coloraxis_showscale=False, 
-                    height=550
+                    showlegend=False,
+                    margin=dict(t=20, b=50, l=70, r=20),
+                    yaxis=dict(
+                        range=[0, cancelamentos_mes["Cancelamentos"].max() * 1.25],
+                        title_text=y_axis_title_canc,
+                        tickformat=",.0f"
+                    ),
+                    coloraxis_showscale=False,
+                    height=550,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)'
                 )
 
                 st.plotly_chart(fig_canc_mes, use_container_width=True)
-
             else:
                 st.info("Nenhum dado de cancelamento para exibir com os filtros aplicados.")
+
 
     
     with tab2:

@@ -803,7 +803,7 @@ def main():
     def atualizar_periodo_pelo_atalho():
         atalho = st.session_state.filtro_ano_atalho
         
-        if atalho == "Todos (desde 2024)":
+        if atalho == "Todos":
             start_date_default = date(2024, 1, 1)
             end_date_default = today
         elif atalho == "Intervalo Personalizado":
@@ -840,13 +840,13 @@ def main():
         else:
             anos_disponiveis = [today.year]
 
-        opcoes_ano = ["Intervalo Personalizado", "Todos (desde 2024)"] + anos_disponiveis
+        opcoes_ano = ["Intervalo Personalizado", "Todos"] + anos_disponiveis
         
         # O selectbox agora chama a função 'atualizar_periodo_pelo_atalho' sempre que seu valor muda.
         st.selectbox(
-            "Selecione um atalho de período:",
+            "Selecione um Ano Específico:",
             options=opcoes_ano,
-            index=1, # Padrão "Todos (desde 2024)"
+            index=1, # Padrão "Todos"
             key="filtro_ano_atalho",
             on_change=atualizar_periodo_pelo_atalho, # <--- A MÁGICA ACONTECE AQUI
             help="Use este atalho para alterar rapidamente o período no calendário acima."
@@ -877,6 +877,33 @@ def main():
             options=['Todos'] + meses_disponiveis,
             index=0
         )
+
+    # ==============================
+    # 📍 Trimestre (expander) - NOVO
+    # ==============================
+    with st.sidebar.expander("📍 Trimestre", expanded=True):
+        # Mapeia o mês para o trimestre correspondente
+        emissoes_df['TRIMESTRE'] = emissoes_df['DATA_EMISSÃO'].dt.quarter.map({
+            1: '1º Trimestre',
+            2: '2º Trimestre',
+            3: '3º Trimestre',
+            4: '4º Trimestre'
+        })
+        cancelamentos_df['TRIMESTRE'] = cancelamentos_df['DATA_CANCELADO'].dt.quarter.map({
+            1: '1º Trimestre',
+            2: '2º Trimestre',
+            3: '3º Trimestre',
+            4: '4º Trimestre'
+        })
+
+        trimestres_disponiveis = sorted(emissoes_df['TRIMESTRE'].dropna().unique())
+
+        trimestre_selecionado = st.selectbox(
+            "Selecione o trimestre:",
+            options=['Todos'] + trimestres_disponiveis,
+            index=0
+        )
+
 
 
     # ==============================
@@ -937,15 +964,23 @@ def main():
             (cancelamentos_filtrado["DATA_CANCELADO"].dt.date <= end_date)
         ]
     
+    # (O código dos filtros de data, mês, etc., continua aqui...)
+
     # Filtro de mês
     if mes_selecionado != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['MÊS'] == mes_selecionado]
         cancelamentos_filtrado = cancelamentos_filtrado[cancelamentos_filtrado['MÊS'] == mes_selecionado]
-    
+
+    # NOVO - Filtro de trimestre
+    if trimestre_selecionado != 'Todos':
+        df_filtrado = df_filtrado[df_filtrado['TRIMESTRE'] == trimestre_selecionado]
+        cancelamentos_filtrado = cancelamentos_filtrado[cancelamentos_filtrado['TRIMESTRE'] == trimestre_selecionado]
+
     # Filtro de expedição
     if expedicao_selecionada != 'Todas':
         df_filtrado = df_filtrado[df_filtrado['EXPEDIÇÃO'] == expedicao_selecionada]
-        cancelamentos_filtrado = cancelamentos_filtrado[cancelamentos_filtrado['EXPEDIÇÃO'] == expedicao_selecionada]
+        # ... (o resto do código de filtros continua)
+
     
     # Filtro de usuário
     if usuario_selecionado != 'Todos':
@@ -1164,33 +1199,46 @@ def main():
         else:
             ultimo_mes_ordem = meses_map.get(mes_selecionado, None)
 
+                # ... (código anterior da tab1) ...
+
         if ultimo_mes_ordem and ultimo_mes_ordem > 1:
             mes_anterior_ordem = ultimo_mes_ordem - 1
 
             nome_mes_atual = meses_map_inv[ultimo_mes_ordem]
             nome_mes_anterior = meses_map_inv[mes_anterior_ordem]
 
-            st.subheader(f"📉 Comparação: {nome_mes_atual} vs {nome_mes_anterior}")
+            # --- INÍCIO DA ATUALIZAÇÃO DO TÍTULO ---
+            
+            # 1. Pega o ano a partir da data final do filtro de período
+            ano_comparacao = end_date.year
+            
+            # 2. Monta o título dinâmico com o ano
+            titulo_comparacao = f"📉 Comparação: {nome_mes_atual} vs {nome_mes_anterior} de {ano_comparacao}"
+            
+            # 3. Renderiza o novo título
+            st.subheader(titulo_comparacao)
+
+            # --- FIM DA ATUALIZAÇÃO ---
 
             # Filtrar dados do mês atual e anterior usando os dataframes originais
-            dados_mes_atual = emissoes_df[emissoes_df["DATA_EMISSÃO"].dt.month == ultimo_mes_ordem]
-            dados_mes_anterior = emissoes_df[emissoes_df["DATA_EMISSÃO"].dt.month == mes_anterior_ordem]
+            # ✅ Adiciona o filtro de ano aqui para garantir que a comparação seja dentro do mesmo ano
+            dados_mes_atual = emissoes_df[
+                (emissoes_df["DATA_EMISSÃO"].dt.month == ultimo_mes_ordem) &
+                (emissoes_df["DATA_EMISSÃO"].dt.year == ano_comparacao)
+            ]
+            dados_mes_anterior = emissoes_df[
+                (emissoes_df["DATA_EMISSÃO"].dt.month == mes_anterior_ordem) &
+                (emissoes_df["DATA_EMISSÃO"].dt.year == ano_comparacao)
+            ]
 
-            canc_mes_atual = cancelamentos_df[cancelamentos_df["DATA_CANCELADO"].dt.month == ultimo_mes_ordem]
-            canc_mes_anterior = cancelamentos_df[cancelamentos_df["DATA_CANCELADO"].dt.month == mes_anterior_ordem]
-
-            # Aplicar filtros adicionais (expedição, usuário)...
-            if expedicao_selecionada != 'Todas':
-                dados_mes_atual = dados_mes_atual[dados_mes_atual['EXPEDIÇÃO'] == expedicao_selecionada]
-                dados_mes_anterior = dados_mes_anterior[dados_mes_anterior['EXPEDIÇÃO'] == expedicao_selecionada]
-                canc_mes_atual = canc_mes_atual[canc_mes_atual['EXPEDIÇÃO'] == expedicao_selecionada]
-                canc_mes_anterior = canc_mes_anterior[canc_mes_anterior['EXPEDIÇÃO'] == expedicao_selecionada]
-
-            if usuario_selecionado != 'Todos':
-                dados_mes_atual = dados_mes_atual[dados_mes_atual['USUÁRIO'].str.strip() == usuario_selecionado.strip()]
-                dados_mes_anterior = dados_mes_anterior[dados_mes_anterior['USUÁRIO'].str.strip() == usuario_selecionado.strip()]
-                canc_mes_atual = canc_mes_atual[canc_mes_atual['USUARIO'].str.strip() == usuario_selecionado.strip()]
-                canc_mes_anterior = canc_mes_anterior[canc_mes_anterior['USUARIO'].str.strip() == usuario_selecionado.strip()]
+            canc_mes_atual = cancelamentos_df[
+                (cancelamentos_df["DATA_CANCELADO"].dt.month == ultimo_mes_ordem) &
+                (cancelamentos_df["DATA_CANCELADO"].dt.year == ano_comparacao)
+            ]
+            canc_mes_anterior = cancelamentos_df[
+                (cancelamentos_df["DATA_CANCELADO"].dt.month == mes_anterior_ordem) &
+                (cancelamentos_df["DATA_CANCELADO"].dt.year == ano_comparacao)
+            ]
 
             # 📌 Aqui você calcula os totais reais primeiro
             emissoes_atual = dados_mes_atual["CTRC_EMITIDO"].sum()
@@ -1648,8 +1696,6 @@ def main():
         # =====================================
         col1_chart, col2_chart = st.columns(2)
 
-        # Cole este bloco completo para substituir o seu 'with col1_chart:'
-
         with col1_chart:
             # Lógica para definir o título e preparar os dados (seu código original)
             if tipo_agregacao == "Totais":
@@ -1671,8 +1717,27 @@ def main():
                 media_correta = (soma_mensal / dias_unicos).reset_index(name='Valor')
                 emissoes_mes = media_correta
 
-            # ✅ AJUSTE 1: Adicionar o subtítulo ANTES de verificar se os dados existem
-            st.markdown(f"<h3 style='text-align: center;'>📈 {y_axis_title}</h3>", unsafe_allow_html=True)
+            # --- INÍCIO DA ATUALIZAÇÃO DO TÍTULO DINÂMICO ---
+
+            # 1. Pega o ano do filtro de atalho
+            ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
+            ano_texto = ""
+            if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+                ano_texto = f" {ano_selecionado}"
+
+            # 2. Constrói o subtítulo com base nos filtros
+            subtitulo_filtro = ""
+            if trimestre_selecionado != "Todos":
+                subtitulo_filtro = f" - {trimestre_selecionado}{ano_texto}"
+            elif mes_selecionado != "Todos":
+                subtitulo_filtro = f" - {mes_selecionado.upper()}{ano_texto}"
+            elif ano_texto:
+                subtitulo_filtro = f" -{ano_texto}"
+
+            # 3. Renderiza o título completo
+            st.markdown(f"<h3 style='text-align: center;'>📈 {y_axis_title}{subtitulo_filtro}</h3>", unsafe_allow_html=True)
+
+            # --- FIM DA ATUALIZAÇÃO ---
 
             if not emissoes_mes.empty:
                 # Mapeamento e ordenação dos meses (seu código original)
@@ -1732,8 +1797,7 @@ def main():
             else:
                 st.info("Nenhum dado de emissão para exibir com os filtros aplicados.")
 
-
-        # Cole este bloco completo para substituir o seu 'with col2_chart:'
+                # Cole este bloco completo para substituir o seu 'with col2_chart:'
 
         with col2_chart:
             # Lógica para definir o título e preparar os dados (seu código original)
@@ -1746,8 +1810,27 @@ def main():
                 cancelamentos_mes.rename(columns={'Cancelamentos_Dia': 'Cancelamentos'}, inplace=True)
                 y_axis_title_canc = 'Média de Cancelamentos'
             
-            # ✅ AJUSTE 1: Adicionar o subtítulo ANTES de verificar se os dados existem
-            st.markdown(f"<h3 style='text-align: center;'>✖️ {y_axis_title_canc}</h3>", unsafe_allow_html=True)
+            # --- INÍCIO DA ATUALIZAÇÃO DO TÍTULO DINÂMICO ---
+
+            # 1. Pega o ano do filtro de atalho
+            ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
+            ano_texto = ""
+            if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+                ano_texto = f" {ano_selecionado}"
+
+            # 2. Constrói o subtítulo com base nos filtros
+            subtitulo_filtro = ""
+            if trimestre_selecionado != "Todos":
+                subtitulo_filtro = f" - {trimestre_selecionado}{ano_texto}"
+            elif mes_selecionado != "Todos":
+                subtitulo_filtro = f" - {mes_selecionado.upper()}{ano_texto}"
+            elif ano_texto:
+                subtitulo_filtro = f" -{ano_texto}"
+
+            # 3. Renderiza o título completo
+            st.markdown(f"<h3 style='text-align: center;'>✖️ {y_axis_title_canc}{subtitulo_filtro}</h3>", unsafe_allow_html=True)
+
+            # --- FIM DA ATUALIZAÇÃO ---
 
             if not cancelamentos_mes.empty:
                 # Mapeamento e ordenação dos meses (seu código original)
@@ -1816,17 +1899,26 @@ def main():
         if df_tab2.empty:
             st.warning("Nenhum dado disponível para o período selecionado.")
         else:
-
-           # ==================================================================
+            # ==================================================================
             #  NOVA SEÇÃO UNIFICADA: DADOS DETALHADOS (EMISSÕES E CANCELAMENTOS)
             # ==================================================================
 
-            # 1. SELETOR PRINCIPAL PARA ESCOLHER ENTRE EMISSÕES E CANCELAMENTOS
-            #    (Estilo atualizado para corresponder à imagem)
+            # ✅ --- INÍCIO DA ALTERAÇÃO --- ✅
+
+            # 1. Crie o título dinâmico ANTES dos botões
+            # Ele verifica se uma expedição foi selecionada e a adiciona ao texto.
+            titulo_expedicao = f" – Expedição: {expedicao_selecionada}" if expedicao_selecionada != "Todas" else ""
+            
+            # 2. Use st.markdown para exibir o título centralizado e estilizado
+
+            # ✅ --- FIM DA ALTERAÇÃO --- ✅
+
+
+            # 3. O seletor de Emissões/Cancelamentos vem DEPOIS do título
             tipo_dado_detalhado = option_menu(
                 menu_title=None,
                 options=["Emissões", "Cancelamentos"],
-                icons=['box-arrow-up-right', 'box-seam-fill'],  # Ícones preenchidos para mais destaque
+                icons=['box-arrow-up-right', 'box-seam-fill'],
                 menu_icon="table",
                 default_index=0,
                 orientation="horizontal",
@@ -1877,41 +1969,56 @@ def main():
                 df_tab2["DIA_SEMANA"] = df_tab2["DATA_EMISSÃO"].dt.weekday.map(mapa_dias_numerico)
 
                 # =================================================================
-                # ✅ INÍCIO DA ALTERAÇÃO
+                # ✅ INÍCIO DA ATUALIZAÇÃO - TÍTULO DINÂMICO COMPLETO
                 # =================================================================
-                
-                # 1. Cria o título dinâmico
-                titulo_seletor_dia = " Selecione o Dia da Semana"
-                if mes_selecionado != "Todos":
-                    # Adiciona o mês ao título, com a primeira letra maiúscula
-                    titulo_seletor_dia += f" - {mes_selecionado.upper()}" # <--- MUDANÇA APLICADA
 
-                # 2. Usa a variável dinâmica no 'menu_title'
+                # 1. Começa com o texto base
+                titulo_seletor_dia = "📅 Selecione o Dia da Semana"
+
+                # 2. Adiciona o mês, se houver filtro
+                if mes_selecionado != "Todos":
+                    titulo_seletor_dia += f" - {mes_selecionado.upper()}"
+
+                # 3. Adiciona o ano do filtro de atalho
+                # Pega o valor do filtro de ano salvo na sessão do Streamlit
+                ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
+                # Adiciona ao título apenas se for um ano específico (ex: "2025")
+                if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+                    titulo_seletor_dia += f"/{ano_selecionado}"
+
+                # 4. Adiciona a expedição, se houver filtro
+                if expedicao_selecionada != "Todas":
+                    titulo_seletor_dia += f" - Expedição: {expedicao_selecionada.upper()}"
+
+                # 5. Usa st.markdown para criar o título próprio e centralizado
+                st.markdown(f"<h4 style='text-align: center; font-weight: 600; margin-bottom: 10px;'>{titulo_seletor_dia}</h4>", unsafe_allow_html=True)
+
+                # 6. Usa o option_menu SEM o menu_title para evitar problemas de alinhamento
                 dia_selecionado = option_menu(
-                    menu_title=titulo_seletor_dia,
+                    menu_title=None,  # Desabilita o título interno do componente
                     options=["Todos", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"],
-                    # ✅ --- NOVOS ÍCONES PROFISSIONAIS AQUI --- ✅
+                    # ✅ --- ÍCONES PROFISSIONAIS --- ✅
                     icons=[
                         "stack",                # Ícone para "Todos"
-                        "calendar-check",         # Ícone para "Segunda"
-                        "calendar-check",     # Ícone para "Terça"
-                        "calendar-check",        # Ícone para "Quarta"
+                        "calendar-check",       # Ícone para "Segunda"
+                        "calendar-check",       # Ícone para "Terça"
+                        "calendar-check",       # Ícone para "Quarta"
                         "calendar-check",       # Ícone para "Quinta"
                         "calendar-check",       # Ícone para "Sexta"
-                        "calendar-check",        # Ícone para "Sábado"
+                        "calendar-check",       # Ícone para "Sábado"
                     ],
                     menu_icon="calendar-check", 
                     default_index=0, 
                     orientation="horizontal",
                     styles={
                         "container": {"padding": "0!important", "background-color": "transparent", "margin-bottom": "25px"},
-                        "menu_title": {"font-size": "16px", "font-weight": "600", "margin-bottom": "10px"},
+                        # A chave "menu_title" não é mais necessária aqui
                         "icon": {"color": "#f1f5f9", "font-size": "16px"},
                         "nav-link": {"font-size": "14px", "text-align": "center", "margin": "0px 2px", "--hover-color": "#334155", "border-radius": "10px", "background-color": "#1e293b", "padding": "8px 12px"},
                         "nav-link-selected": {"background-color": "#4f46e5", "font-weight": "bold", "color": "white"},
                     }
                 )
-                
+
                 # =================================================================
                 # ✅ FIM DA ALTERAÇÃO
                 # =================================================================
@@ -1938,14 +2045,16 @@ def main():
 
                     # REGRA PRINCIPAL: Se "Todos" estiver selecionado, filtramos o df_kpis
                     # Se "Todas" estiver selecionado, só considerar NOITE e DIA
-                    if expedicao_selecionada.upper() in ['TODOS', 'TODAS']:
-                        df_kpis = df_kpis[df_kpis['EXPEDIÇÃO'].isin(['NOITE', 'DIA'])]
+                    
+                    # if expedicao_selecionada.upper() in ['TODOS', 'TODAS']:  <-- COMENTE OU REMOVA ESTA LINHA
+                    #     df_kpis = df_kpis[df_kpis['EXPEDIÇÃO'].isin(['NOITE', 'DIA'])] <-- E ESTA TAMBÉM
 
                     # --- CÁLCULO DOS KPIs A PARTIR DO df_kpis JÁ FILTRADO ---
                     if not df_kpis.empty:
-                        total_emissoes = df_kpis["CTRC_EMITIDO"].sum()
+                        total_emissoes = df_kpis["CTRC_EMITIDO"].sum() # <-- AGORA ESTA LINHA USARÁ TODOS OS DADOS
                         usuarios_unicos = df_kpis["USUÁRIO"].nunique()
                         periodo = f"{df_kpis['DATA_EMISSÃO'].min().strftime('%d/%m/%Y')} a {df_kpis['DATA_EMISSÃO'].max().strftime('%d/%m/%Y')}"
+
 
                         if is_single_day:
                             # CENÁRIO 1: DIA ÚNICO
@@ -2038,6 +2147,7 @@ def main():
 
 
             # --- SE O USUÁRIO ESCOLHER "CANCELAMENTOS" ---
+            # --- SE O USUÁRIO ESCOLHER "CANCELAMENTOS" ---
             else:
                 # Garante que a coluna de data é datetime
                 cancelamentos_tab2["DATA_CANCELADO"] = pd.to_datetime(cancelamentos_tab2["DATA_CANCELADO"], errors="coerce")
@@ -2047,36 +2157,52 @@ def main():
                 cancelamentos_tab2["DIA_SEMANA"] = cancelamentos_tab2["DATA_CANCELADO"].dt.weekday.map(mapa_dias_numerico_canc)
 
                 # =================================================================
-                # ✅ INÍCIO DA ALTERAÇÃO
+                # ✅ INÍCIO DA ATUALIZAÇÃO - TÍTULO CENTRALIZADO E COMPLETO
                 # =================================================================
 
-                # 1. Cria o título dinâmico, mostrando o mês selecionado
-                titulo_base_canc = "Selecione o Dia da Semana"
-                # Adiciona o mês ao título se um filtro de mês estiver ativo
-                titulo_mes_canc = f" - {mes_selecionado.upper()}" if mes_selecionado != "Todos" else ""
-                titulo_completo_canc = f"{titulo_base_canc}{titulo_mes_canc}"
+                # 1. Cria o título dinâmico em etapas, igual à seção de Emissões
+                titulo_base_canc = "📅 Selecione o Dia da Semana"
+                
+                # Adiciona o mês, se houver filtro
+                if mes_selecionado != "Todos":
+                    titulo_base_canc += f" - {mes_selecionado.upper()}"
 
-                # 2. Usa o título dinâmico e a lista de ícones correta
+                # Adiciona o ano do filtro de atalho
+                ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
+                if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+                    titulo_base_canc += f"/{ano_selecionado}"
+
+                # Adiciona a expedição, se houver filtro
+                if expedicao_selecionada != "Todas":
+                    titulo_base_canc += f" - Expedição: {expedicao_selecionada.upper()}"
+
+                # 2. Usa st.markdown para criar o título CENTRALIZADO
+                st.markdown(f"<h4 style='text-align: center; font-weight: 600; margin-bottom: 10px;'>{titulo_base_canc}</h4>", unsafe_allow_html=True)
+
+                # 3. Usa o option_menu SEM o menu_title
                 dia_selecionado_canc = option_menu(
-                    menu_title=titulo_completo_canc,  # <--- TÍTULO DINÂMICO APLICADO
+                    menu_title=None,  # Desabilita o título interno
                     options=["Todos", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"],
-                    # ✅ --- ÍCONES CORRIGIDOS E VARIADOS --- ✅
-                    icons=[
-                        "stack", "calendar-x", "calendar-x", "calendar-x",
-                        "calendar-x", "calendar-x", "calendar-x"
-                    ],
-                    menu_icon="calendar-x",  # Ícone principal temático
+                    icons=["stack", "calendar-x", "calendar-x", "calendar-x", "calendar-x", "calendar-x", "calendar-x"],
+                    menu_icon="calendar-x",
                     default_index=0,
                     orientation="horizontal",
                     key="filtro_dia_cancelamento",
                     styles={
                         "container": {"padding": "0!important", "background-color": "transparent", "margin-bottom": "25px"},
-                        "menu_title": {"font-size": "16px", "font-weight": "600", "margin-bottom": "10px"},
                         "icon": {"color": "#f1f5f9", "font-size": "16px"},
                         "nav-link": {"font-size": "14px", "text-align": "center", "margin": "0px 2px", "--hover-color": "#334155", "border-radius": "10px", "background-color": "#1e293b", "padding": "8px 12px"},
                         "nav-link-selected": {"background-color": "#dc2626", "font-weight": "bold", "color": "white"},
                     }
                 )
+                
+                # =================================================================
+                # ✅ FIM DA ATUALIZAÇÃO
+                # =================================================================
+
+                # (O resto do seu código para a seção de cancelamentos continua aqui...)
+
+
 
                 # =================================================================
                 # ✅ FIM DA ALTERAÇÃO
@@ -2360,9 +2486,30 @@ def main():
             # 📈 GRÁFICO 1: Totais
             # ===============================
             with col1:
-                # Adiciona o mês no título (se não for "Todos")
-                titulo_mes = f" - {mes_selecionado.upper()}" if mes_selecionado != "Todos" else ""
-                st.markdown(f"<h3 style='text-align: center;'>📈 Total de Emissões{titulo_mes}</h3>", unsafe_allow_html=True)   
+                # --- INÍCIO DA ATUALIZAÇÃO DO TÍTULO DINÂMICO ---
+
+                # 1. Pega o ano do filtro de atalho para usar no título
+                ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
+                ano_texto = "" # Inicia a variável de ano como vazia
+                # Adiciona o ano ao texto apenas se um ano específico for selecionado
+                if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+                    ano_texto = f" {ano_selecionado}"
+
+                # 2. Constrói o subtítulo dinâmico com base nos filtros
+                subtitulo_filtro = "" # Inicia o subtítulo como vazio
+                if trimestre_selecionado != "Todos":
+                    # Se um trimestre for selecionado, ele tem prioridade
+                    subtitulo_filtro = f" - {trimestre_selecionado}{ano_texto}"
+                elif mes_selecionado != "Todos":
+                    # Se não houver trimestre, mas houver mês, usa o mês
+                    subtitulo_filtro = f" - {mes_selecionado.upper()}{ano_texto}"
+                elif ano_texto:
+                    # Se não houver nem trimestre nem mês, mas houver ano, usa só o ano
+                    subtitulo_filtro = f" -{ano_texto}"
+                # Se nenhum filtro específico for selecionado, o subtítulo permanece vazio
+
+                # 3. Renderiza o título completo e centralizado
+                st.markdown(f"<h3 style='text-align: center;'>📈 Total de Emissões por Dia da Semana{subtitulo_filtro}</h3>", unsafe_allow_html=True)  
 
                 max_emissoes_sum = weekday_stats["sum"].max()
                 max_cancelamentos_sum = weekday_stats["cancelamentos_sum"].max()
@@ -2544,9 +2691,31 @@ def main():
             # 📊 GRÁFICO 2: Médias
             # ===============================
             with col2:
-                # Adiciona o mês no título (se não for "Todos")
-                titulo_mes = f" - {mes_selecionado}" if mes_selecionado != "Todos" else ""
-                st.markdown(f"### 📊 Médias de Emissões{titulo_mes}")
+                # --- INÍCIO DA ATUALIZAÇÃO DO TÍTULO DINÂMICO ---
+
+                # 1. Pega o ano do filtro de atalho para usar no título
+                ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
+                ano_texto = "" # Inicia a variável de ano como vazia
+                # Adiciona o ano ao texto apenas se um ano específico for selecionado
+                if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+                    ano_texto = f" {ano_selecionado}"
+
+                # 2. Constrói o subtítulo dinâmico com base nos filtros
+                subtitulo_filtro = "" # Inicia o subtítulo como vazio
+                if trimestre_selecionado != "Todos":
+                    # Se um trimestre for selecionado, ele tem prioridade
+                    subtitulo_filtro = f" - {trimestre_selecionado}{ano_texto}"
+                elif mes_selecionado != "Todos":
+                    # Se não houver trimestre, mas houver mês, usa o mês
+                    subtitulo_filtro = f" - {mes_selecionado.upper()}{ano_texto}"
+                elif ano_texto:
+                    # Se não houver nem trimestre nem mês, mas houver ano, usa só o ano
+                    subtitulo_filtro = f" -{ano_texto}"
+                # Se nenhum filtro específico for selecionado, o subtítulo permanece vazio
+
+                # 3. Renderiza o título completo e centralizado
+                st.markdown(f"<h3 style='text-align: center;'>📊 Médias de Emissões por Dia da Semana{subtitulo_filtro}</h3>", unsafe_allow_html=True)
+
                 
                 max_emissoes_mean = weekday_stats["mean"].max()
                 max_cancelamentos_mean = weekday_stats["cancelamentos_mean"].max()
@@ -3680,17 +3849,39 @@ def main():
         st.markdown("---")
 
         # =================================================================
-        # ✅ INÍCIO DO CÓDIGO CORRIGIDO (v4 - Final)
+        # ✅ INÍCIO DO CÓDIGO ATUALIZADO (Título Dinâmico para Anos)
         # =================================================================
 
-        # Define o título do gráfico
-        st.subheader(f"📈 Evolução Comparativa da Taxa de Cancelamento — {st.session_state.get('filtro_ano_atalho', '')}")
-
+        # --- 1. LÓGICA PARA CRIAR O TÍTULO DINÂMICO ---
+        # Pega o valor atual do filtro de atalho de ano
+        filtro_ano_selecionado = st.session_state.get('filtro_ano_atalho', 'Todos')
 
         # Usa os dataframes já filtrados pelo período principal do dashboard
         emissoes_periodo = df_tab4.copy()
         cancelamentos_periodo = cancelamentos_tab4.copy()
 
+        # Se um ano específico foi selecionado no atalho (ex: 2025)
+        if filtro_ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+            texto_ano_titulo = filtro_ano_selecionado
+        # Se "Todos" foi selecionado, descobre os anos presentes nos dados e os junta
+        elif filtro_ano_selecionado == "Todos":
+            if not emissoes_periodo.empty:
+                anos_no_periodo = sorted(emissoes_periodo['DATA_EMISSÃO'].dt.year.unique())
+                # Junta os anos com uma barra, ex: "2024/2025"
+                texto_ano_titulo = "/".join(map(str, anos_no_periodo))
+            else:
+                texto_ano_titulo = "Nenhum dado"
+        # Para "Intervalo Personalizado", mostra o intervalo de datas
+        else:
+            start_date_fmt = start_date.strftime('%d/%m/%y')
+            end_date_fmt = end_date.strftime('%d/%m/%y')
+            texto_ano_titulo = f"de {start_date_fmt} a {end_date_fmt}"
+
+        # --- 2. EXIBE O TÍTULO FINAL ---
+        st.subheader(f"📈 Evolução Comparativa da Taxa de Cancelamento — {texto_ano_titulo}")
+
+
+        # --- 3. O RESTANTE DO CÓDIGO PARA GERAR O GRÁFICO CONTINUA ---
         # Verifica se há dados para processar
         if not emissoes_periodo.empty and not cancelamentos_periodo.empty:
             
@@ -3723,6 +3914,9 @@ def main():
                 df_evolucao_ano['Taxa_Cancelamento'] = (df_evolucao_ano['Cancelamentos'] / df_evolucao_ano['Emissoes'] * 100).fillna(0)
                 
                 df_evolucao_ano['Ano'] = ano
+
+        # (O restante do seu código, como a criação dos traces do gráfico, continua a partir daqui)
+
 
                 # --- CORREÇÃO DE SINTAXE APLICADA AQUI ---
                 fig_evolucao_comparativa.add_trace(go.Scatter(

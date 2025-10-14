@@ -792,14 +792,17 @@ def main():
 
     st.sidebar.markdown("---")
 
+    today = datetime.now().date()
+
     # =================================================================
-    # ✅ INÍCIO DA LÓGICA FINAL COM CALLBACKS
+    # ✅ INÍCIO DA LÓGICA FINAL E CORRIGIDA (v2)
     # =================================================================
 
     today = datetime.now().date()
+    ano_default = 2025
 
     # --- 1. Função de Callback para o Atalho ---
-    # Esta função será chamada SEMPRE que o valor do selectbox 'filtro_ano_atalho' mudar.
+    # (Sua função 'atualizar_periodo_pelo_atalho' continua aqui, sem alterações)
     def atualizar_periodo_pelo_atalho():
         atalho = st.session_state.filtro_ano_atalho
         
@@ -807,27 +810,34 @@ def main():
             start_date_default = date(2024, 1, 1)
             end_date_default = today
         elif atalho == "Intervalo Personalizado":
-            # Não faz nada, mantém o valor que já está no calendário
             return
-        else: # Se for um ano específico (ex: "2025")
+        else:
             ano_num = int(atalho)
             start_date_default = date(ano_num, 1, 1)
             end_date_default = date(ano_num, 12, 31) if ano_num != today.year else today
         
-        # Atualiza o session_state do calendário. Como isso acontece via callback, é seguro.
         st.session_state.date_range_final = (start_date_default, end_date_default)
 
-    # --- 2. Inicialização do st.session_state (se necessário) ---
-    # Garante que a chave 'date_range_final' exista antes de qualquer widget ser criado.
-    if 'date_range_final' not in st.session_state:
-        st.session_state.date_range_final = (date(2024, 1, 1), today)
+    # --- 2. Inicialização Inteligente do st.session_state ---
+    # Este bloco só roda UMA VEZ, na primeira vez que o app é aberto.
+    if 'app_inicializado' not in st.session_state:
+        # Define o ano de 2025 como o padrão inicial
+        start_date_inicial = date(ano_default, 1, 1)
+        end_date_inicial = date(ano_default, 12, 31) if ano_default != today.year else today
+        
+        # Grava o período inicial e o atalho correspondente no estado da sessão
+        st.session_state.date_range_final = (start_date_inicial, end_date_inicial)
+        st.session_state.filtro_ano_atalho = ano_default
+        
+        # Marca o app como inicializado para não rodar este bloco de novo
+        st.session_state.app_inicializado = True
+
 
     # --- 3. Calendário de Período (Filtro Principal) ---
     with st.sidebar.expander("🗓️ Período de Emissão (Filtro Principal)", expanded=True):
-        # O widget de data agora lê seu valor diretamente do session_state.
         date_range_final = st.date_input(
             "Selecione o intervalo de datas:",
-            key="date_range_final", # A chave conecta o widget ao session_state
+            key="date_range_final", # Conectado ao session_state
             min_value=date(2023, 1, 1),
             max_value=today,
             format="DD/MM/YYYY"
@@ -836,21 +846,27 @@ def main():
     # --- 4. Filtro Rápido por Ano (Atalho) ---
     with st.sidebar.expander("📅 Filtro Rápido por Ano (Atalho)", expanded=True):
         if not emissoes_df.empty:
-            anos_disponiveis = sorted(emissoes_df['DATA_EMISSÃO'].dt.year.unique())
+            anos_disponiveis = sorted(pd.to_numeric(emissoes_df['DATA_EMISSÃO'].dt.year, errors='coerce').dropna().unique().astype(int))
         else:
             anos_disponiveis = [today.year]
 
         opcoes_ano = ["Intervalo Personalizado", "Todos"] + anos_disponiveis
         
-        # O selectbox agora chama a função 'atualizar_periodo_pelo_atalho' sempre que seu valor muda.
+        # O selectbox agora lê sua opção padrão diretamente do session_state
         st.selectbox(
             "Selecione um Ano Específico:",
             options=opcoes_ano,
-            index=1, # Padrão "Todos"
-            key="filtro_ano_atalho",
-            on_change=atualizar_periodo_pelo_atalho, # <--- A MÁGICA ACONTECE AQUI
+            key="filtro_ano_atalho", # Conectado ao session_state
+            on_change=atualizar_periodo_pelo_atalho,
             help="Use este atalho para alterar rapidamente o período no calendário acima."
         )
+
+    # --- 5. Define as datas finais que serão usadas para filtrar os dados ---
+    if len(date_range_final) == 2:
+        start_date, end_date = date_range_final
+    else:
+        start_date, end_date = st.session_state.date_range_final
+
 
     # --- 5. Define as datas finais que serão usadas para filtrar os dados ---
     # As datas continuam vindo do calendário, que é a fonte final da verdade.

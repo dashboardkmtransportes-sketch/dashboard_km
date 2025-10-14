@@ -3931,20 +3931,29 @@ def main():
                 
                 df_evolucao_ano['Ano'] = ano
 
-        # (O restante do seu código, como a criação dos traces do gráfico, continua a partir daqui)
 
+                # --- CORREÇÃO DE SINTAXE APLICADA E MELHORADA AQUI ---
+                # Adiciona leve deslocamento vertical no texto para evitar sobreposição
+                y_text = df_evolucao_ano['Taxa_Cancelamento'] + (0.05 if ano == 2025 else -0.05)
 
-                # --- CORREÇÃO DE SINTAXE APLICADA AQUI ---
                 fig_evolucao_comparativa.add_trace(go.Scatter(
                     x=df_evolucao_ano.index,
-                    y=df_evolucao_ano['Taxa_Cancelamento'],
+                    y=y_text,  # usa o valor deslocado para o texto
                     customdata=df_evolucao_ano['Ano'],
                     mode='lines+markers+text',
                     name=f'Ano {ano}',
                     line=dict(color=cores_anos[i % len(cores_anos)], width=3),
                     marker=dict(size=8),
+                    
+                    # Texto das porcentagens formatado
                     text=[f"{y:.2f}%" for y in df_evolucao_ano['Taxa_Cancelamento']],
-                    textposition='top center' if ano == 2025 else 'bottom center',
+                    
+                    # Posição do texto — uma lista (aceita por ponto)
+                    textposition=[
+                        'top center' if ano == 2025 else 'bottom center'
+                        for _ in df_evolucao_ano['Taxa_Cancelamento']
+                    ],
+                    
                     textfont=dict(size=13, color='white', family="Verdana"),
 
                     # Tooltip minimalista com divisor abaixo da Taxa
@@ -3954,6 +3963,7 @@ def main():
                                 "margin-top:4px; margin-bottom:4px;'></span>"
                                 "<extra></extra>"
                 ))
+
 
                 # --- Estilo visual moderno (modo escuro translúcido) ---
                 fig_evolucao_comparativa.update_layout(
@@ -3967,9 +3977,6 @@ def main():
                         namelength=-1,
                     ),
                 )
-                # --- FIM DA CORREÇÃO ---
-
-
 
             fig_evolucao_comparativa.add_hline(
                 y=0.75, 

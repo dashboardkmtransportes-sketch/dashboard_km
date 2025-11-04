@@ -13,6 +13,7 @@ import base64
 import unicodedata
 from streamlit_option_menu import option_menu
 import os 
+import altair as alt
 
 # ✅ NOVA FUNÇÃO PARA EMBUTIR A IMAGEM
 def get_image_as_base64(path):
@@ -1159,7 +1160,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
         
         # Novos KPIs de Média
         st.subheader("📊 Indicadores de Produtividade")
@@ -1192,7 +1193,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
         
         # Espaçamento após KPIs de Produtividade
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1463,7 +1464,7 @@ def main():
         else:
             st.info("Sem comparação disponível (primeiro mês do ano ou dados insuficientes).")
         
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         # Espaçamento entre seções
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1514,38 +1515,53 @@ def main():
 
         # Seção de Velocímetro e Evolução da Taxa
         if usuario_selecionado == 'Todos':
-            col_title1, col_title2 = st.columns([1, 2])
-            with col_title1:
-                st.markdown(
-                    "<h3 style='text-align:center; font-size:24px;'>🎯 Monitoramento da Meta de Cancelamento</h3>",
-                    unsafe_allow_html=True
-                )
-
-            ano_atual = datetime.now().year
-            with col_title2:
-                st.markdown(
-                    f"<h3 style='text-align:center; font-size:22px;'>📈 Evolução da Taxa de Cancelamento {ano_atual}</h3>",
-                    unsafe_allow_html=True
-                )
-            
+            # --- CORREÇÃO APLICADA AQUI ---
+            # Unificamos os títulos e os gráficos nas mesmas colunas para evitar duplicação.
             col1, col2 = st.columns([1, 2])
 
             with col1:
-                # Gráfico de velocímetro para a meta
+                # Título do primeiro gráfico (Velocímetro)
+                st.markdown(
+                    "<h3 style='text-align:center; font-size:24px;'>🎯 Monitoramento da Meta</h3>",
+                    unsafe_allow_html=True
+                )
+                # (O código do gráfico de velocímetro continua aqui dentro)
                 gauge_fig = create_gauge_chart(
                     value=taxa_cancelamento/100,
-                    max_value=0.02,  # 2% como máximo
+                    max_value=0.02,
                     title="Taxa de Cancelamento vs Meta"
                 )
                 st.plotly_chart(gauge_fig, use_container_width=True)
 
-                # Definir nome do mês ou período
-                mes_texto = mes_selecionado if mes_selecionado != "Todos" else "Ano Atual"
+                # --- INÍCIO DA CORREÇÃO ---
+
+                # 1. Lógica para definir o texto do período dinamicamente
+                ano_selecionado = st.session_state.get('filtro_ano_atalho')
+                texto_periodo = ""
+
+                if mes_selecionado != "Todos":
+                    # Se um mês for selecionado, ele tem prioridade
+                    texto_periodo = mes_selecionado.title()
+                elif ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
+                    # Se não houver mês, mas um ano específico for selecionado, mostra o ano
+                    texto_periodo = str(ano_selecionado)
+                elif ano_selecionado == "Todos":
+                    # Se "Todos" os anos estiverem selecionados
+                    texto_periodo = "Geral"
+                else:
+                    # Se for um intervalo personalizado, mostra o intervalo
+                    texto_periodo = f"{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}"
+
+
+                # 2. Renderiza o texto dinâmico
                 st.markdown(f"""
                     <div style="text-align:center; margin-top:10px;">
-                        <span style="color:#FFFFFF; font-size:24px; font-weight:bold;">📆 {mes_texto}</span>
+                        <span style="color:#FFFFFF; font-size:24px; font-weight:bold;">📆 {texto_periodo}</span>
                     </div>
                 """, unsafe_allow_html=True)
+
+                # --- FIM DA CORREÇÃO ---
+
 
                 # Aviso Dinâmico abaixo do velocímetro
                 if taxa_cancelamento <= meta_taxa:
@@ -1583,20 +1599,36 @@ def main():
                     )
 
             with col2:
-                # Gráfico de Evolução da Taxa de Cancelamento {ano_atual}
-                ano_atual = datetime.now().year
-                emissoes_ano_atual = df_filtrado[df_filtrado['DATA_EMISSÃO'].dt.year == ano_atual].copy()
-                cancelamentos_ano_atual = cancelamentos_filtrado[cancelamentos_filtrado['DATA_CANCELADO'].dt.year == ano_atual].copy()
+                # --- INÍCIO DA CORREÇÃO ---
 
-                if not emissoes_ano_atual.empty and not cancelamentos_ano_atual.empty:
-                    emissoes_mensais = emissoes_ano_atual.groupby(emissoes_ano_atual['DATA_EMISSÃO'].dt.to_period('M'))['CTRC_EMITIDO'].sum()
-                    cancelamentos_mensais = cancelamentos_ano_atual.groupby(cancelamentos_ano_atual['DATA_CANCELADO'].dt.to_period('M')).size()
+                # 1. Determina o ano a ser exibido com base no filtro principal
+                # Se um ano específico for selecionado, use-o. Caso contrário, use o ano atual.
+                ano_selecionado_filtro = st.session_state.get('filtro_ano_atalho')
+                if ano_selecionado_filtro and ano_selecionado_filtro not in ["Todos", "Intervalo Personalizado"]:
+                    ano_para_grafico = int(ano_selecionado_filtro)
+                else:
+                    # Se for "Todos" ou "Intervalo", pega o ano da data final do período
+                    ano_para_grafico = end_date.year
 
-                    meses_ano = pd.period_range(start=f'{ano_atual}-01', end=f'{ano_atual}-12', freq='M')
+                # 2. Título dinâmico que reflete o ano selecionado
+                st.markdown(
+                    f"<h3 style='text-align:center; font-size:22px;'>📈 Evolução da Taxa de Cancelamento {ano_para_grafico}</h3>",
+                    unsafe_allow_html=True
+                )
+
+                # 3. Filtra os dados para o ano que será exibido no gráfico
+                emissoes_ano_selecionado = df_filtrado[df_filtrado['DATA_EMISSÃO'].dt.year == ano_para_grafico].copy()
+                cancelamentos_ano_selecionado = cancelamentos_filtrado[cancelamentos_filtrado['DATA_CANCELADO'].dt.year == ano_para_grafico].copy()
+
+                if not emissoes_ano_selecionado.empty and not cancelamentos_ano_selecionado.empty:
+                    emissoes_mensais = emissoes_ano_selecionado.groupby(emissoes_ano_selecionado['DATA_EMISSÃO'].dt.to_period('M'))['CTRC_EMITIDO'].sum()
+                    cancelamentos_mensais = cancelamentos_ano_selecionado.groupby(cancelamentos_ano_selecionado['DATA_CANCELADO'].dt.to_period('M')).size()
+
+                    meses_ano = pd.period_range(start=f'{ano_para_grafico}-01', end=f'{ano_para_grafico}-12', freq='M')
                     df_evolucao = pd.DataFrame(index=meses_ano)
                     df_evolucao['Emissoes'] = emissoes_mensais.reindex(meses_ano, fill_value=0)
 
-                    # 👉 Força denominadores fixos (jan–ago) APENAS na visão geral
+                    # Aplica denominadores fixos se aplicável
                     if usuario_selecionado == "Todos" and expedicao_selecionada == "Todas":
                         for nome_mes, valor in EMISSOES_FIXAS_MES.items():
                             pos = MESES_MAP[nome_mes] - 1
@@ -1658,6 +1690,8 @@ def main():
 
         # Seção de gráficos principais
         st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
         
         # ===============================
         # 📊 Exibição dos Dados - Emissões e Cancelamentos
@@ -1705,13 +1739,16 @@ def main():
                 }
             )
 
-        # =====================================
-        # 📈 Emissões (Totais ou Médias)
-        # =====================================
+        # =================================================================
+        # 📊 Exibição dos Dados com ALTAIR (v5 - CORREÇÃO FINAL DE LARGURA E ALTURA)
+        # =================================================================
+        import altair as alt # Garanta que esta importação está no topo do seu script
+
         col1_chart, col2_chart = st.columns(2)
 
+        # --- GRÁFICO DE EMISSÕES COM ALTAIR ---
         with col1_chart:
-            # Lógica para definir o título e preparar os dados (seu código original)
+            # Lógica para preparar os dados (continua a mesma)
             if tipo_agregacao == "Totais":
                 emissoes_mes = df_filtrado.groupby('MÊS')['CTRC_EMITIDO'].sum().reset_index()
                 emissoes_mes.rename(columns={'CTRC_EMITIDO': 'Valor'}, inplace=True)
@@ -1720,101 +1757,62 @@ def main():
                 y_axis_title = 'Média de Emissões'
                 df_para_media = df_filtrado.copy()
                 df_para_media['DIA_SEMANA_NUM'] = df_para_media['DATA_EMISSÃO'].dt.weekday
-
                 if expedicao_selecionada == 'NOITE':
                     df_para_media = df_para_media[df_para_media['DIA_SEMANA_NUM'] < 5]
                 elif expedicao_selecionada == 'DIA':
                     df_para_media = df_para_media[df_para_media['DIA_SEMANA_NUM'] < 6]
-
                 soma_mensal = df_para_media.groupby('MÊS')['CTRC_EMITIDO'].sum()
                 dias_unicos = df_para_media.groupby('MÊS')['DATA_EMISSÃO'].nunique()
                 media_correta = (soma_mensal / dias_unicos).reset_index(name='Valor')
                 emissoes_mes = media_correta
 
-            # --- INÍCIO DA ATUALIZAÇÃO DO TÍTULO DINÂMICO ---
-
-            # 1. Pega o ano do filtro de atalho
+            # Título dinâmico (continua o mesmo)
             ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
-            ano_texto = ""
-            if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
-                ano_texto = f" {ano_selecionado}"
-
-            # 2. Constrói o subtítulo com base nos filtros
-            subtitulo_filtro = ""
-            if trimestre_selecionado != "Todos":
-                subtitulo_filtro = f" - {trimestre_selecionado}{ano_texto}"
-            elif mes_selecionado != "Todos":
-                subtitulo_filtro = f" - {mes_selecionado.upper()}{ano_texto}"
-            elif ano_texto:
-                subtitulo_filtro = f" -{ano_texto}"
-
-            # 3. Renderiza o título completo
+            ano_texto = f" {ano_selecionado}" if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"] else ""
+            subtitulo_filtro = f" - {trimestre_selecionado}{ano_texto}" if trimestre_selecionado != "Todos" else (f" - {mes_selecionado.upper()}{ano_texto}" if mes_selecionado != "Todos" else (f" -{ano_texto}" if ano_texto else ""))
             st.markdown(f"<h3 style='text-align: center;'>📈 {y_axis_title}{subtitulo_filtro}</h3>", unsafe_allow_html=True)
 
-            # --- FIM DA ATUALIZAÇÃO ---
-
             if not emissoes_mes.empty:
-                # Mapeamento e ordenação dos meses (seu código original)
-                meses_abrev = {
-                    "JANEIRO": "JAN", "FEVEREIRO": "FEV", "MARÇO": "MAR", "ABRIL": "ABR",
-                    "MAIO": "MAI", "JUNHO": "JUN", "JULHO": "JUL", "AGOSTO": "AGO",
-                    "SETEMBRO": "SET", "OUTUBRO": "OUT", "NOVEMBRO": "NOV", "DEZEMBRO": "DEZ"
-                }
-                # Garante que a coluna 'MÊS' esteja em maiúsculas
+                # Preparação dos dados para o Altair
+                meses_abrev = {"JANEIRO": "JAN", "FEVEREIRO": "FEV", "MARÇO": "MAR", "ABRIL": "ABR", "MAIO": "MAI", "JUNHO": "JUN", "JULHO": "JUL", "AGOSTO": "AGO", "SETEMBRO": "SET", "OUTUBRO": "OUT", "NOVEMBRO": "NOV", "DEZEMBRO": "DEZ"}
+                ordem_meses = list(meses_abrev.values())
                 emissoes_mes["MÊS"] = emissoes_mes["MÊS"].str.upper()
                 emissoes_mes["MES_ABREV"] = emissoes_mes["MÊS"].map(meses_abrev)
 
-                ordem = {mes: i for i, mes in enumerate(meses_abrev.keys())}
-                emissoes_mes["ordem"] = emissoes_mes["MÊS"].map(ordem)
-                emissoes_mes = emissoes_mes.sort_values("ordem")
+                # ✅ CORREÇÃO: Define a altura do gráfico dinamicamente
+                num_meses = len(emissoes_mes)
+                altura_grafico = max(700, num_meses * 50) 
 
-                # Criação do gráfico (seu código original)
-                fig_emissoes_mes = px.bar(
-                    emissoes_mes,
-                    x="MES_ABREV",
-                    y="Valor",
-                    title="", # Título interno vazio
-                    color="Valor",
-                    color_continuous_scale='Blues',
-                    text='Valor'
+                # Criação do gráfico base com Altair
+                base = alt.Chart(emissoes_mes).encode(
+                    x=alt.X('Valor:Q', title=y_axis_title, axis=alt.Axis(grid=False, labelColor='white', titleColor='white', format=',.0f', labelFontSize=14, titleFontSize=14)),
+                    # ✅ ALTERAÇÃO 1: Aumenta o tamanho da fonte dos meses (JAN, FEV...)
+                    y=alt.Y('MES_ABREV:N', title=None, sort=ordem_meses, axis=alt.Axis(labelPadding=5, labelColor='white', domain=False, ticks=False, labelFontSize=14))
+                ).properties(
+                    height=altura_grafico
                 )
 
-                # Rótulos formatados (seu código original)
-                fig_emissoes_mes.update_traces(
-                    text=[f"{int(v):,}".replace(",", ".") for v in emissoes_mes["Valor"]],
-                    textposition='outside',
-                    textfont_size=15
+                # ✅ ALTERAÇÃO PRINCIPAL: Definimos a espessura da barra
+                bars = base.mark_bar(
+                    color='#4c78a8',
+                    size=40  # Define a espessura de cada barra em pixels. Ajuste este valor!
                 )
 
-                # Layout estético
-                fig_emissoes_mes.update_layout(
-                    showlegend=False,
-                    margin=dict(t=20, b=60, l=70, r=20),
-                    yaxis=dict(
-                        range=[0, emissoes_mes["Valor"].max() * 1.3],
-                        title_text=y_axis_title,
-                        tickformat=",.0f"
-                    ),
-                    xaxis=dict(
-                        title="",
-                        tickangle=0,
-                        # ✅ AJUSTE 2: Aplicar a fonte maior e em negrito
-                        tickfont=dict(size=15, color='white', family='Verdana')
-                    ),
-                    coloraxis_colorbar=dict(tickformat=",.0f"),
-                    height=550,
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)'
+                # ✅ ALTERAÇÃO 2: Aumenta o tamanho da fonte dos valores (47,391...)
+                text = base.mark_text(
+                    align='left', baseline='middle', dx=5, color='white', fontSize=14 # Aumentado de 12 para 14
+                ).encode(
+                    text=alt.Text('Valor:Q', format=",.0f")
                 )
 
-                st.plotly_chart(fig_emissoes_mes, use_container_width=True)
+                chart = (bars + text).configure_view(strokeWidth=0)
+                st.altair_chart(chart, use_container_width=True, theme=None)
             else:
-                st.info("Nenhum dado de emissão para exibir com os filtros aplicados.")
+                st.info("Nenhum dado de emissão para exibir.")
 
-                # Cole este bloco completo para substituir o seu 'with col2_chart:'
-
+        # --- GRÁFICO DE CANCELAMENTOS COM ALTAIR ---
         with col2_chart:
-            # Lógica para definir o título e preparar os dados (seu código original)
+            # Lógica para preparar os dados (continua a mesma)
             if tipo_agregacao == "Totais":
                 cancelamentos_mes = cancelamentos_filtrado.groupby('MÊS').size().reset_index(name='Cancelamentos')
                 y_axis_title_canc = 'Total de Cancelamentos'
@@ -1823,86 +1821,45 @@ def main():
                 cancelamentos_mes = cancelamentos_por_dia.groupby('MÊS')['Cancelamentos_Dia'].mean().reset_index()
                 cancelamentos_mes.rename(columns={'Cancelamentos_Dia': 'Cancelamentos'}, inplace=True)
                 y_axis_title_canc = 'Média de Cancelamentos'
-            
-            # --- INÍCIO DA ATUALIZAÇÃO DO TÍTULO DINÂMICO ---
 
-            # 1. Pega o ano do filtro de atalho
-            ano_selecionado = st.session_state.get('filtro_ano_atalho', '')
-            ano_texto = ""
-            if ano_selecionado and ano_selecionado not in ["Todos", "Intervalo Personalizado"]:
-                ano_texto = f" {ano_selecionado}"
-
-            # 2. Constrói o subtítulo com base nos filtros
-            subtitulo_filtro = ""
-            if trimestre_selecionado != "Todos":
-                subtitulo_filtro = f" - {trimestre_selecionado}{ano_texto}"
-            elif mes_selecionado != "Todos":
-                subtitulo_filtro = f" - {mes_selecionado.upper()}{ano_texto}"
-            elif ano_texto:
-                subtitulo_filtro = f" -{ano_texto}"
-
-            # 3. Renderiza o título completo
+            # Título dinâmico (continua o mesmo)
             st.markdown(f"<h3 style='text-align: center;'>✖️ {y_axis_title_canc}{subtitulo_filtro}</h3>", unsafe_allow_html=True)
 
-            # --- FIM DA ATUALIZAÇÃO ---
-
             if not cancelamentos_mes.empty:
-                # Mapeamento e ordenação dos meses (seu código original)
-                meses_abrev = {
-                    "JANEIRO": "JAN", "FEVEREIRO": "FEV", "MARÇO": "MAR", "ABRIL": "ABR",
-                    "MAIO": "MAI", "JUNHO": "JUN", "JULHO": "JUL", "AGOSTO": "AGO",
-                    "SETEMBRO": "SET", "OUTUBRO": "OUT", "NOVEMBRO": "NOV", "DEZEMBRO": "DEZ"
-                }
+                # Preparação dos dados para o Altair
                 cancelamentos_mes["MÊS"] = cancelamentos_mes["MÊS"].str.upper()
                 cancelamentos_mes["MES_ABREV"] = cancelamentos_mes["MÊS"].map(meses_abrev)
-                ordem = {mes: i for i, mes in enumerate(meses_abrev.keys())}
-                cancelamentos_mes["ordem"] = cancelamentos_mes["MÊS"].map(ordem)
-                cancelamentos_mes = cancelamentos_mes.sort_values("ordem")
 
-                # Criação do gráfico (seu código original)
-                fig_canc_mes = px.bar(
-                    cancelamentos_mes,
-                    x="MES_ABREV",
-                    y="Cancelamentos",
-                    title="", # Título interno vazio
-                    color="Cancelamentos",
-                    color_continuous_scale=px.colors.sequential.OrRd,
-                    text="Cancelamentos"
+                # ✅ CORREÇÃO: Define a altura do gráfico dinamicamente
+                num_meses_canc = len(cancelamentos_mes)
+                altura_grafico_canc = max(700, num_meses_canc * 50)
+
+                # Criação do gráfico base com Altair
+                base_canc = alt.Chart(cancelamentos_mes).encode(
+                    x=alt.X('Cancelamentos:Q', title=y_axis_title_canc, axis=alt.Axis(grid=False, labelColor='white', titleColor='white', format=',.0f', labelFontSize=14, titleFontSize=14)),
+                    # ✅ ALTERAÇÃO 1: Aumenta o tamanho da fonte dos meses (JAN, FEV...)
+                    y=alt.Y('MES_ABREV:N', title=None, sort=ordem_meses, axis=alt.Axis(labelPadding=5, labelColor='white', domain=False, ticks=False, labelFontSize=14))
+                ).properties(
+                    height=altura_grafico_canc
                 )
 
-                # Rótulos formatados (seu código original)
-                fig_canc_mes.update_traces(
-                    text=[f"{int(v):,}".replace(",", ".") for v in cancelamentos_mes["Cancelamentos"]],
-                    textposition='outside',
-                    textfont_size=15
-                )
-                    
-                # Layout estético
-                fig_canc_mes.update_layout(
-                    xaxis=dict(
-                        title_text=None,
-                        tickangle=0,
-                        # ✅ AJUSTE 2: Aplicar a fonte maior e em negrito
-                        tickfont=dict(size=15, color='white', family="Verdana")
-                    ),
-                    showlegend=False,
-                    margin=dict(t=20, b=50, l=70, r=20),
-                    yaxis=dict(
-                        range=[0, cancelamentos_mes["Cancelamentos"].max() * 1.25],
-                        title_text=y_axis_title_canc,
-                        tickformat=",.0f"
-                    ),
-                    coloraxis_showscale=False,
-                    height=550,
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)'
+                # ✅ ALTERAÇÃO PRINCIPAL: Definimos a espessura da barra
+                bars_canc = base_canc.mark_bar(
+                    color='#e45756',
+                    size=40 # Define a espessura de cada barra em pixels.
                 )
 
-                st.plotly_chart(fig_canc_mes, use_container_width=True)
+                # ✅ ALTERAÇÃO 2: Aumenta o tamanho da fonte dos valores (631...)
+                text_canc = base_canc.mark_text(
+                    align='left', baseline='middle', dx=5, color='white', fontSize=14 # Aumentado de 12 para 14
+                ).encode(
+                    text=alt.Text('Cancelamentos:Q', format=",.0f")
+                )
+
+                chart_canc = (bars_canc + text_canc).configure_view(strokeWidth=0)
+                st.altair_chart(chart_canc, use_container_width=True, theme=None)
             else:
-                st.info("Nenhum dado de cancelamento para exibir com os filtros aplicados.")
-
-
+                st.info("Nenhum dado de cancelamento para exibir.")
     
     with tab2:
 
@@ -2144,7 +2101,7 @@ def main():
                 with col4: st.markdown(f'<div class="kpi-card kpi-purple"><div class="kpi-icon">👤</div><div class="kpi-value">{usuarios_unicos}</div><div class="kpi-label">Usuários</div></div>', unsafe_allow_html=True)
                 with col5: st.markdown(f'<div class="kpi-card kpi-orange"><div class="kpi-icon">📅</div><div class="kpi-value" style="font-size: 1.4rem; padding-top: 10px;">{periodo}</div><div class="kpi-label">Período Analisado</div></div>', unsafe_allow_html=True)
                 
-                st.markdown("---")
+                st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
                 # Mostra a tabela de emissões
                 if not df_filtrado_dias.empty:
@@ -2375,8 +2332,7 @@ def main():
                     </div>
                     ''', unsafe_allow_html=True)
 
-
-                st.markdown("---")
+                st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
                 # Mostra a tabela de cancelamentos
                 if not df_filtrado_dias_canc.empty:
@@ -2392,7 +2348,7 @@ def main():
                 csv_canc = df_filtrado_dias_canc.to_csv(index=False).encode("utf-8")
                 st.download_button("📥 Baixar dados de cancelamentos (CSV)", data=csv_canc, file_name="dados_cancelamentos_semanais.csv", mime="text/csv", key="download_cancelamento_detalhado")
 
-            st.markdown("---")
+            st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
             # ===============================
             # Substitua o conteúdo da sua 'tab2' por este bloco
@@ -2821,8 +2777,7 @@ def main():
                 st.markdown(f"📉 **Menor Média:** {pior_dia_medias}")
                 st.markdown(f"🚨 **Pico de Cancelamentos:** {dia_mais_cancel_mean}")
 
-        st.markdown("---")
-
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
     
     with tab_individual:
         st.header("📌 Análise Individual")
@@ -2904,7 +2859,7 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
 
-                st.markdown("---")
+                st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
                 # ===============================
                 # ANÁLISE INDIVIDUAL DE CANCELAMENTOS - KPIs
@@ -2974,8 +2929,7 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
 
-                st.markdown("---")
-                
+                st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
                 # Gráficos de Emissões e Cancelamentos
                 # =============================================================
@@ -3044,7 +2998,7 @@ def main():
                     fig_cancel.update_layout(height=350, showlegend=False, margin=dict(l=20, r=40, t=20, b=20), yaxis_title=None, xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis={'categoryorder':'total descending'})
                     st.plotly_chart(fig_cancel, use_container_width=True)
 
-                st.markdown("---")
+                st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
                 # =============================================================
                 # ❌ Análise de Motivos de Cancelamento (Versão Moderna)
@@ -3172,7 +3126,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         # Top Performers
         st.subheader("🏆 Top Performers")
@@ -3197,7 +3151,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         st.subheader("👥 Análise Comparativa de Usuários")
         st.markdown("Selecione dois usuários para comparar a produtividade e o perfil de emissão.")
@@ -3411,7 +3365,7 @@ def main():
                         "🗓️", "#8b5cf6"
                     )
 
-                st.markdown("---")
+                st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
        # =============================================================
         # 🏆 Ranking de Usuários (Versão Moderna e Larga)
@@ -3860,7 +3814,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         # =================================================================
         # ✅ INÍCIO DO CÓDIGO ATUALIZADO (Título Dinâmico para Anos)
@@ -4017,7 +3971,7 @@ def main():
         # ✅ FIM DO CÓDIGO CORRIGIDO (v4 - Final)
         # =================================================================
         
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         # KPI de Motivo Mais Comum
         st.subheader("💡 Motivo de Cancelamento Mais Comum")
@@ -4031,7 +3985,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
         
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
         
         # Cancelamentos por mês
         
@@ -4067,7 +4021,7 @@ def main():
 
         st.plotly_chart(fig_canc_mes, use_container_width=True)
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         # Top motivos de cancelamento
         st.subheader("🔍 Top 10 Motivos de Cancelamento")
@@ -4103,7 +4057,7 @@ def main():
         )
         st.plotly_chart(fig_motivos, use_container_width=True)
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         # Cancelamentos por Usuário
         if usuario_selecionado == "Todos" or cancelamentos_tab4["USUARIO"].nunique() > 1:
@@ -4159,7 +4113,7 @@ def main():
             else:
                 st.info(f"Nenhum cancelamento encontrado para o usuário {usuario_selecionado} no período selecionado.")
 
-        st.markdown("---")
+        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
         col_expedicao, col_motivos_geral = st.columns(2)
         
@@ -4363,7 +4317,7 @@ def main():
                     # ...
 
                     # ====== GRÁFICO DINÂMICO E TABELA DE SETORES ======
-                    st.markdown("---")
+                    st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
                     titulo_grafico = "📈 Análise Gráfica dos Dados Filtrados"
                     if filtro_usuario != "Todos":
@@ -4616,7 +4570,7 @@ def main():
 
                     # --- TABELA DE DADOS FILTRADA POR SETOR ---
                     if tipo_dados == "Cancelamentos":
-                        st.markdown("---")
+                        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
                         # Título já centralizado para manter a consistência
                         st.markdown("<h3 style='text-align: center;'>📋 Tabela por Setores de Cancelamentos</h3>", unsafe_allow_html=True)
 
@@ -4708,7 +4662,7 @@ def main():
 
                    # --- GRÁFICO DE PIZZA POR SETOR ---
                     if tipo_dados == "Cancelamentos" and coluna_para_grafico == "MOTIVO":
-                        st.markdown("---")
+                        st.markdown('<hr style="border: 1px solid #333; margin: 20px 0;">', unsafe_allow_html=True)
 
                         # Monta o título dinâmico
                         titulo_setor = "### 📊 Análise de Cancelamentos por Setor"
